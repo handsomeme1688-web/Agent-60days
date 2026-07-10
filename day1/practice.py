@@ -3,7 +3,7 @@
 写「命令行通讯录」：用一个 Contact 类 + JSON 文件持久化，支持增/删/查/列出。写完 commit。
 '''
 
-from fileinput import filename
+
 import json
 import os
 from pathlib import Path
@@ -32,11 +32,8 @@ def load_data(filename):
     # 若文件为空或路径不存在
     if not Path(filename).exists() or os.path.getsize(filename)==0:
         with open(filename,'w',encoding='utf-8') as f:
-            json.dump([],f)
+            json.dump([],f,ensure_ascii=False,indent=2)
         return []
-         
-
-
     with open(filename,'r',encoding="utf-8") as f:
         data_list=json.load(f)
         return data_list
@@ -53,6 +50,11 @@ def find(name,filename=file):
     print("无此联系人！")
     return False
 
+def list(filename=file):
+    data_list=load_data(filename)
+    print(data_list)
+
+
 # 删
 def deleteByName(name,filename=file):
     if not find(name,filename):
@@ -64,7 +66,7 @@ def deleteByName(name,filename=file):
     
     # 重新写入
     with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f)
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
     print("删除成功！")
 
 
@@ -90,13 +92,12 @@ def update(name,filename=file):
     data_list =load_data(filename)
     for d in data_list:
         if d["name"]== name:
-            d["name"]=name
             d["phone"]=phone
             d["remark"]=remark
-        print("修改成功！", d)
-        break
+            print("修改成功！", d)
+            break
     with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f)
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
     return 
     
 
@@ -109,14 +110,14 @@ def add(filename):
     name=input('请输入联系人姓名：')
     for d in data_list:
         if d["name"]==name:
-            print("新增失败！联系人已存在："+ d)
+            print("新增失败！联系人已存在：", d)
             return 
     phone=input("请输入电话：")
     remark=input("请输入备注：")
     contact=Contact(name,phone,remark)
     data_list.append(Contact2dict(contact))
     with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f)
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
     print("新增成功！")
 
 def main():
@@ -129,6 +130,7 @@ def main():
         print("修改联系人，请输入：3")
         print("查询联系人，请输入：4")
         print("清空联系人，请输入：5")
+        print("查询所有联系人，请输入：6")
         print("退出系统，请输入：0")
         print("------------------------------")
 
@@ -147,6 +149,8 @@ def main():
                 find(name)
             case '5':
                 deleteAll(file)
+            case '6':
+                list(file)
             case "0":
                 flag=False
                 exit()

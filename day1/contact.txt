@@ -1,1 +1,22 @@
-[{"name": "\u5f20\u4e09", "phone": "111", "remark": "\u5e05\u54e5"}, {"name": "\u674e\u56db", "phone": "222", "remark": "\u7f8e\u5973"}, {"name": "\u738b\u4e94", "phone": "333", "remark": "\u65e0"}]
+[
+  {
+    "name": "张三",
+    "phone": "111",
+    "remark": "帅哥"
+  },
+  {
+    "name": "李四",
+    "phone": "222",
+    "remark": "美女"
+  },
+  {
+    "name": "王五",
+    "phone": "444",
+    "remark": "gay"
+  },
+  {
+    "name": "老六",
+    "phone": "666",
+    "remark": "老六"
+  }
+]
