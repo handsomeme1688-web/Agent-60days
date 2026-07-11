@@ -1,0 +1,271 @@
+'''
+任务《通讯录 v2》
+要求：① 全部函数加类型注解；② 联系人改用 Pydantic 模型，校验手机号 11 位、邮箱含 @，非法输入
+给出人话报错；③ 写一个 @timer 装饰器，打印每个命令耗时。
+
+'''
+
+
+
+import time
+from turtle import st
+from typing import Annotated, Callable
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError
+import json
+import os
+from pathlib import Path
+from torch import long
+
+class Contact(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name : str
+    phone : Annotated[int,Field(ge=10_000_000_000,le=99_999_999_999)]
+    email : Annotated[str,StringConstraints(pattern='.*@.*')]
+    remark : str
+    
+
+def timer(func:Callable)->Callable:
+    def wrapper(*args,**kw):
+        start_time=time.perf_counter()
+        res=func(*args,**kw)
+        end_time=time.perf_counter()
+        past=end_time-start_time
+        print(f"函数{func.__name__}运行了{past}秒")
+        return res
+    return wrapper
+        
+    
+    
+
+def Contact2dict(contact:Contact)->dict:
+    return {
+        "name":contact.name,
+        "phone":contact.phone,
+        "email":contact.email,
+        "remark":contact.remark
+    }
+
+def dict2Contact(d:dict)->Contact | None:
+    try:
+        contact=Contact(**d)
+        return contact
+    except ValidationError as e:
+        pass
+        
+            
+    
+
+# 指定要修改的文件
+file="./day1/contact.txt"
+
+
+def load_data(filename:str)->list:
+    # 若文件为空或路径不存在
+    if not Path(filename).exists() or os.path.getsize(filename)==0:
+        with open(filename,'w',encoding='utf-8') as f:
+            json.dump([],f,ensure_ascii=False,indent=2)
+        return []
+    with open(filename,'r',encoding="utf-8") as f:
+        data_list=json.load(f)
+        return data_list
+
+# 查 
+@timer
+def find(name:str,filename:str=file)->bool:
+    if load_data(filename) ==[]:
+        print("通讯录为空")
+        return False
+    for data in load_data(filename):
+        if data["name"]==name:
+            print(data)
+            return True
+    print("无此联系人！")
+    return False
+
+#查所有
+@timer
+def list(filename:str=file)->None:
+    data_list=load_data(filename)
+    if data_list==[]:
+        print("没有联系人！")
+        return
+    print(data_list)
+
+
+# 删
+@timer
+def deleteByName(name:str,filename:str=file)->None:
+    if not find(name,filename):
+        print("联系人不存在或通讯录为空")
+        return
+    # 获取所有数据
+    data_list=load_data(filename)
+    # 删掉匹配项
+    data_list=[d for d in data_list if d["name"]!=name]
+    
+    # 重新写入
+    with open(filename,'w',encoding='utf-8') as f:
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
+    print("删除成功！")
+    return
+
+#删全部
+@timer
+def deleteAll(filename:str =file)-> None:
+    flag=input("此操作会删除所有联系人，请再次确认！(y/n)")
+    if flag=='y': 
+        
+        with open(filename,'w',encoding='utf-8') as f:
+            print("通讯录已清空！")
+            pass
+    else:
+        return
+
+# 改
+@timer
+def update(name:str,filename:str=file)->None:
+
+
+    if not find(name,filename):
+        print("联系人不存在或通讯录为空")
+        return 
+    
+    # 电话和邮箱分开检查
+    
+    #只检查电话
+    while(True):
+        try:
+            raw_phone=input("此人的电话：")
+            phone=int(raw_phone)
+            # contact=Contact(name=name,phone=phone,email=email,remark=remark)
+            # 提取 Contact 模型中 phone 字段的规则，单独进行质检
+            phone_validator = TypeAdapter(Contact.model_fields['phone'].annotation)
+            phone_validator.validate_python(phone)
+            break
+        except ValidationError as e: # ValidationError是ValueError的子类，必须放前面
+            print("输入错误：手机号码必须是 11 位数字。")
+
+        except ValueError:
+            print("电话号码必须是数字！")
+
+
+    # 检查邮箱
+    while(True):
+        try:
+            email=input("此人的邮箱：")
+
+            # 提取 Contact 模型中 email 字段的规则，单独进行质检
+            email_validator = TypeAdapter(Contact.model_fields['email'].annotation)
+            email_validator.validate_python(email)
+            break
+        except ValidationError as e: # ValidationError是ValueError的子类，必须放前面
+            print("输入错误：邮箱必须包含'@'")
+
+        
+    remark=input("备注：")
+    data_list =load_data(filename)
+    for d in data_list:
+        if d["name"]== name:
+            d["phone"]=phone
+            d["email"]=email
+            d["remark"]=remark
+            print("修改成功！", d)
+            break
+    with open(filename,'w',encoding='utf-8') as f:
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
+    return 
+    
+
+# 增，append
+# 新建一个Contact类对象--> 打开文件,反序列化后读取数据--> 查询文件中是否已存在 --> 存在则返回，新增失败 --> 不存在转成dict --> 序列化为json --> 存入文件 --> close就能写入磁盘
+@timer
+def add(filename:str)->None:
+    data_list=load_data(filename)
+    
+
+    name=input('请输入联系人姓名：')
+    for d in data_list:
+        if d["name"]==name:
+            print("新增失败！联系人已存在：", d)
+            return 
+    #只检查电话
+    while(True):
+        try:
+            raw_phone=input("电话：")
+            phone=int(raw_phone)
+            # contact=Contact(name=name,phone=phone,email=email,remark=remark)
+            # 提取 Contact 模型中 phone 字段的规则，单独进行质检
+            phone_validator = TypeAdapter(Contact.model_fields['phone'].annotation)
+            phone_validator.validate_python(phone)
+            break
+        except ValidationError as e: # ValidationError是ValueError的子类，必须放前面
+            print("输入错误：手机号码必须是 11 位数字。")
+            
+        except ValueError:
+            print("电话号码必须是数字！")
+            
+
+    # 检查邮箱
+    while(True):
+        try:
+            email=input("邮箱：")
+
+            # 提取 Contact 模型中 email 字段的规则，单独进行质检
+            email_validator = TypeAdapter(Contact.model_fields['email'].annotation)
+            email_validator.validate_python(email)
+            break
+        except ValidationError as e: # ValidationError是ValueError的子类，必须放前面
+            print("输入错误：邮箱必须包含'@'")
+
+    remark=input("请输入备注：")
+
+    phone=int(raw_phone)
+    contact=Contact(name=name,phone=phone,email=email,remark=remark)
+
+    data_list.append(Contact2dict(contact))
+    with open(filename,'w',encoding='utf-8') as f:
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
+    print("新增成功！")
+
+
+
+def main()->None:
+    # 这里放你程序的核心业务逻辑
+    flag=True
+    while(flag):
+        print("---------通讯录管理系统---------")
+        print("新增联系人，请输入：1")
+        print("删除联系人，请输入：2")
+        print("修改联系人，请输入：3")
+        print("查询联系人，请输入：4")
+        print("清空联系人，请输入：5")
+        print("查询所有联系人，请输入：6")
+        print("退出系统，请输入：0")
+        print("------------------------------")
+
+        index=input("")
+        match index:
+            case "1":
+                add(file)
+            case "2":
+                name=input("请输入你要删除的联系人姓名：")
+                deleteByName(name)
+            case "3":
+                name=input("请输入你要修改的联系人姓名：")
+                update(name)
+            case "4":
+                name=input("请输入你要查询的联系人姓名：")
+                find(name)
+            case '5':
+                deleteAll(file)
+            case '6':
+                list(file)
+            case "0":
+                flag=False
+                exit()
+            case _:
+                print("非法输入！请重新输入！")
+    
+
+if __name__ == "__main__":
+    main()
