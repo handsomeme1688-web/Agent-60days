@@ -103,7 +103,6 @@ def find_by_name(name:str,filename:Path=file)->dict:
         return {}
     for data in data_all:
         if data["name"]==name:
-            # print(data)
             return data
     return {}
 
@@ -112,9 +111,7 @@ def find_by_name(name:str,filename:Path=file)->dict:
 def list_all(filename:Path=file)->list:
     data_list=load_data(filename)
     if data_list==[]:
-        # print("没有联系人！")
         return []
-    # print(data_list)
     return data_list
 
 
@@ -129,7 +126,7 @@ def delete_by_name(name:str,filename:Path=file)-> bool:
     data_list=[d for d in data_list if d["name"]!=name]
     
     # 重新写入
-    save_data(data_list,file)
+    save_data(data_list,filename)
     return True
 
 #删全部
@@ -150,7 +147,7 @@ def update(contact:Contact,filename:Path=file)->bool:
             d["email"]=contact.email
             d["remark"]=contact.remark
             break
-    save_data(data_list,file)
+    save_data(data_list,filename)
     return True
     
 
@@ -158,9 +155,16 @@ def update(contact:Contact,filename:Path=file)->bool:
 # 新建一个Contact类对象--> 打开文件,反序列化后读取数据--> 查询文件中是否已存在 --> 存在则返回，新增失败 --> 不存在转成dict --> 序列化为json --> 存入文件 --> close就能写入磁盘
 @timer
 def add(contact:Contact,filename:Path)->bool:
-    data_list=load_data(filename)
+    data_list = load_data(filename)
+    
+    # 1. 业务规则把关：在已有的数据中检查是否重名
+    # 假设你的 data_list 里面存的是字典，通过 ['name'] 获取名字
+    for item in data_list:
+        if item.get("name") == contact.name:
+            return False  # 重名了，添加失败，直接返回 False
+        
     data_list.append(Contact2dict(contact))
-    save_data(data_list,file)
+    save_data(data_list,filename)
     return True
 
 
@@ -184,16 +188,14 @@ def main()->None:
         match index:
             case "1":
                 name=input('请输入你要新增的联系人姓名：')
-                if find_by_name(name,file):
-                    print("新增失败！联系人已存在!")
-                    continue
-                
                 phone=ask_valid("电话号码：",phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
                 email=ask_valid("邮箱：",email_adapter,"邮箱必须包含'@'符号！")
                 remark=input("请输入备注：")
                 contact=Contact(name=name,phone=phone,email=email,remark=remark)
                 if add(contact, file):
                     print("新增成功！")
+                else:
+                    print("新增失败！联系人已存在！")
             case "2":
                 name=input("请输入你要删除的联系人姓名：")
                 if not delete_by_name(name):  
@@ -209,14 +211,15 @@ def main()->None:
                 phone=ask_valid("电话号码：", phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
                 email=ask_valid("邮箱：", email_adapter,"邮箱必须包含'@'符号！")
                 remark=input("备注：")
-                if update(name):
+                contact=Contact(name=name,phone=phone,email=email,remark=remark)
+                if update(contact):
                     print("修改成功！")
             case "4":
                 name=input("请输入你要查询的联系人姓名：")
                 print(find_by_name(name))
             case '5':
-                flag=input("此操作会删除所有联系人，请再次确认！(y/n)")
-                if deleteAll(flag,file):
+                confirm=input("此操作会删除所有联系人，请再次确认！(y/n)")
+                if deleteAll(confirm,file):
                     print("删除成功！")
             case '6':
                 print(list_all(file))
