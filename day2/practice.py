@@ -8,14 +8,13 @@
 
 
 import time
-from turtle import st
 from typing import Annotated, Callable
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError
+from pydantic import BaseModel, StringConstraints, TypeAdapter, ValidationError
 import json
 import os
 from pathlib import Path
-from regex import P
-from torch import long
+
+
 
 #类型别名
 Phone=Annotated[str,StringConstraints(pattern=r'^1\d{10}$')]
@@ -28,7 +27,6 @@ email_adapter=TypeAdapter(Email)
 
 # 定义Pydantic类
 class Contact(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     name : str
     phone : Phone
     email : Email
@@ -81,126 +79,94 @@ def dict2Contact(d:dict)->Contact | None:
 # 指定要修改的文件
 file=Path(__file__).parent/"contacts.json"
 
-
+# 加载数据
 def load_data(filename:Path)->list:
     # 若文件为空或路径不存在
     if not Path(filename).exists() or os.path.getsize(filename)==0:
-        with open(filename,'w',encoding='utf-8') as f:
-            json.dump([],f,ensure_ascii=False,indent=2)
+        save_data([],filename)
         return []
     with open(filename,'r',encoding="utf-8") as f:
         data_list=json.load(f)
         return data_list
 
+
+# 保存数据
+def save_data(data_list:list,filename:Path)->None:
+    with open(filename,'w',encoding='utf-8') as f:
+        json.dump(data_list,f,ensure_ascii=False,indent=2)
+
 # 查 
 @timer
-def find(name:str,filename:Path=file)->bool:
+def find_by_name(name:str,filename:Path=file)->dict:
     data_all=load_data(filename)
     if data_all ==[]:
-        print("通讯录为空")
-        return False
+        return {}
     for data in data_all:
         if data["name"]==name:
-            print(data)
-            return True
-    print("无此联系人！")
-    return False
+            # print(data)
+            return data
+    return {}
 
 #查所有
 @timer
-def list_all(filename:Path=file)->None:
+def list_all(filename:Path=file)->list:
     data_list=load_data(filename)
     if data_list==[]:
-        print("没有联系人！")
-        return
-    print(data_list)
+        # print("没有联系人！")
+        return []
+    # print(data_list)
+    return data_list
 
 
 # 删
 @timer
-def deleteByName(name:str,filename:Path=file)->None:
-    if not find(name,filename):
-        print("联系人不存在或通讯录为空")
-        return
+def delete_by_name(name:str,filename:Path=file)-> bool:
+    if not find_by_name(name,filename):
+        return False
     # 获取所有数据
     data_list=load_data(filename)
     # 删掉匹配项
     data_list=[d for d in data_list if d["name"]!=name]
     
     # 重新写入
-    with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f,ensure_ascii=False,indent=2)
-    print("删除成功！")
-    return
+    save_data(data_list,file)
+    return True
 
 #删全部
 @timer
-def deleteAll(filename:Path =file)-> None:
-    flag=input("此操作会删除所有联系人，请再次确认！(y/n)")
+def deleteAll(flag:str,filename:Path =file)-> bool:
     if flag=='y': 
-        
-        with open(filename,'w',encoding='utf-8') as f:
-            
-            print("通讯录已清空！")
-            pass
-    else:
-        return
+        save_data([],file)
+        return True
+    return False
 
 # 改
 @timer
-def update(name:str,filename:Path=file)->None:
-
-
-    if not find(name,filename):
-        print("联系人不存在或通讯录为空")
-        return 
-    
-    # 电话和邮箱分开检查
-    phone=ask_valid("电话号码：",phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
-    email=ask_valid("邮箱：",email_adapter,"邮箱必须包含'@'符号！")
-    
-    remark=input("备注：")
+def update(contact:Contact,filename:Path=file)->bool:
     data_list =load_data(filename)
     for d in data_list:
-        if d["name"]== name:
-            d["phone"]=phone
-            d["email"]=email
-            d["remark"]=remark
-            print("修改成功！", d)
+        if d["name"]== contact.name:
+            d["phone"]=contact.phone
+            d["email"]=contact.email
+            d["remark"]=contact.remark
             break
-    with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f,ensure_ascii=False,indent=2)
-    return 
+    save_data(data_list,file)
+    return True
     
 
 # 增，append
 # 新建一个Contact类对象--> 打开文件,反序列化后读取数据--> 查询文件中是否已存在 --> 存在则返回，新增失败 --> 不存在转成dict --> 序列化为json --> 存入文件 --> close就能写入磁盘
 @timer
-def add(filename:Path)->None:
+def add(contact:Contact,filename:Path)->bool:
     data_list=load_data(filename)
-    
-
-    name=input('请输入联系人姓名：')
-    for d in data_list:
-        if d["name"]==name:
-            print("新增失败！联系人已存在：", d)
-            return 
-        
-    phone=ask_valid("电话号码：",phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
-    email=ask_valid("邮箱：",email_adapter,"邮箱必须包含'@'符号！")
-    remark=input("请输入备注：")
-
-    
-    contact=Contact(name=name,phone=phone,email=email,remark=remark)
-
     data_list.append(Contact2dict(contact))
-    with open(filename,'w',encoding='utf-8') as f:
-        json.dump(data_list,f,ensure_ascii=False,indent=2)
-    print("新增成功！")
+    save_data(data_list,file)
+    return True
 
 
 
 def main()->None:
+    
     # 这里放你程序的核心业务逻辑
     flag=True
     while(flag):
@@ -217,20 +183,43 @@ def main()->None:
         index=input("")
         match index:
             case "1":
-                add(file)
+                name=input('请输入你要新增的联系人姓名：')
+                if find_by_name(name,file):
+                    print("新增失败！联系人已存在!")
+                    continue
+                
+                phone=ask_valid("电话号码：",phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
+                email=ask_valid("邮箱：",email_adapter,"邮箱必须包含'@'符号！")
+                remark=input("请输入备注：")
+                contact=Contact(name=name,phone=phone,email=email,remark=remark)
+                if add(contact, file):
+                    print("新增成功！")
             case "2":
                 name=input("请输入你要删除的联系人姓名：")
-                deleteByName(name)
+                if not delete_by_name(name):  
+                    print("联系人不存在或通讯录为空")
+                else:
+                    print("删除成功！")
             case "3":
                 name=input("请输入你要修改的联系人姓名：")
-                update(name)
+                if not find_by_name(name,file):
+                    print("联系人不存在或通讯录为空")
+                    continue
+                # 电话和邮箱分开检查
+                phone=ask_valid("电话号码：", phone_adapter,"电话号码必须是11位数字，且以数字1开头！")
+                email=ask_valid("邮箱：", email_adapter,"邮箱必须包含'@'符号！")
+                remark=input("备注：")
+                if update(name):
+                    print("修改成功！")
             case "4":
                 name=input("请输入你要查询的联系人姓名：")
-                find(name)
+                print(find_by_name(name))
             case '5':
-                deleteAll(file)
+                flag=input("此操作会删除所有联系人，请再次确认！(y/n)")
+                if deleteAll(flag,file):
+                    print("删除成功！")
             case '6':
-                list_all(file)
+                print(list_all(file))
             case "0":
                 flag=False
                 exit()
