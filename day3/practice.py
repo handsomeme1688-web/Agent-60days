@@ -15,7 +15,8 @@ from typing import Callable
 import httpx
 import time
 
-URL='https://httpbingo.org/delay/2'
+# URL='https://httpbingo.org/delay/2'
+URL='http://127.0.0.1:8000/delay'
 
 # 同步计时器
 def timer(func:Callable)->Callable:
@@ -45,6 +46,7 @@ def synchronous_send(n:int,url:str)->None:
     for _ in range(n):
         r=httpx.get(url,timeout=100.0)
         r.raise_for_status()
+        print(r)
 
         
   
@@ -52,6 +54,7 @@ def synchronous_send(n:int,url:str)->None:
 async def asyncio_send(client:httpx.AsyncClient,url:str)->None:
     r= await client.get(url,timeout=100.0)
     r.raise_for_status()
+    print(r)
 
 @async_timer
 async def run_asyn(url:str,n:int)->None:
