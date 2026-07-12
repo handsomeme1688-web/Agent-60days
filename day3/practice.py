@@ -15,8 +15,9 @@ from typing import Callable
 import httpx
 import time
 
-URL='https://httpbin.org/delay/2'
+URL='https://httpbingo.org/delay/2'
 
+# 同步计时器
 def timer(func:Callable)->Callable:
     def wrapper(*args,**kw):
         start_time=time.perf_counter()
@@ -27,47 +28,45 @@ def timer(func:Callable)->Callable:
         return res
     return wrapper
 
+# 异步计时器
+def async_timer(func:Callable)->Callable:
+    async def wrapper(*args,**kw):
+        start_time=time.perf_counter()
+        res = await func(*args,**kw)
+        end_time=time.perf_counter()
+        past_time=end_time-start_time
+        print(f'{func.__name__}运行了{past_time:.2f}')
+        return res
+    return wrapper
+
 # 同步发送
 @timer
 def synchronous_send(n:int,url:str)->None:
-    while n:
-        n=n-1
+    for _ in range(n):
         r=httpx.get(url,timeout=100.0)
-        print(r)
+        r.raise_for_status()
+
+        
   
-# 异步
-async def asyncio_send(url:str)->None:
-    r=httpx.get(url,timeout=100.0)
-    print(r)
+# 异步发送
+async def asyncio_send(client:httpx.AsyncClient,url:str)->None:
+    r= await client.get(url,timeout=100.0)
+    r.raise_for_status()
 
+@async_timer
+async def run_asyn(url:str,n:int)->None:
+    async with httpx.AsyncClient() as client:
+        await asyncio.gather(*[asyncio_send(client,url) for _ in range(n)] )
+        
 
-async def run_asyn(url:str)->None:
-    L = asyncio.gather(
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url),        
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url),
-        asyncio_send(url)
-    )
-    print(L)
 
     
 def main()->None:
     print("--- 开始同步循环测试 ---")
     synchronous_send(10,URL)    
-    
-    print("\n-----------------------\n")
     print("--- 开始异步并发测试 ---")
-    start_time=time.perf_counter()
-    asyncio.run(run_asyn(URL))
-    end_time=time.perf_counter()
-    past_time=end_time-start_time
-    print(f'异步并发运行了{past_time:.2f}')
+    asyncio.run(run_asyn(URL,10))
+
     
     
 if __name__ == '__main__':
