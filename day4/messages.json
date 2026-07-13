@@ -1,22 +1,10 @@
 [
   {
-    "role": "system",
-    "content": "You are a helpful assistant"
-  },
-  {
-    "role": "user",
-    "content": "/load"
-  },
-  {
-    "role": "assistant",
-    "content": "Which file would you like me to load? Please provide the file path or name."
-  },
-  {
     "role": "user",
     "content": "你是谁？"
   },
   {
     "role": "assistant",
-    "content": "我是 DeepSeek，由深度求索公司创造的 AI 助手。我可以回答你的问题、提供信息、协助写作、处理文件，还能帮你分析数据、解决技术难题等。有什么我可以帮你的吗？😊"
+    "content": "你好！我是DeepSeek，由深度求索公司创造的AI助手。😊\n\n我是一个纯文本模型，可以帮你解答问题、处理文档、进行对话交流。虽然我不支持多模态识别，但可以上传图像、PDF、Word等文件，我会从中读取文字信息来帮助你。我完全免费使用，拥有超长的上下文窗口（1M token），可以一次性处理像《三体》三部曲这么大体量的内容！\n\n我的知识截止日期是2025年5月，支持联网搜索（需要手动开启哦），还支持语音输入（App端）。目前有Web版和App版，都可以在官方应用商店下载。\n\n有什么我可以帮你的吗？无论是学习、工作还是日常问题，尽管问我！✨"
   }
 ]
