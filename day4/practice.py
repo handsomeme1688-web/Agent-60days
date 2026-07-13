@@ -7,7 +7,6 @@
 
 import json
 from pathlib import Path
-from typing import Any
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +19,7 @@ class Settings(BaseSettings):
     # 定义需要从 .env 中读取的变量名
     deepseek_api_key:str
     deepseek_base_url:str
+    deepseek_model: str = "deepseek-v4-pro"
     
     model_config=SettingsConfigDict(
         env_file=".env",
@@ -41,7 +41,7 @@ client=OpenAI(
 # 响应生成
 def generate_response(messages:list)->ChatCompletion:
     response = client.chat.completions.create(
-        model="deepseek-v4-pro",
+        model=settings.deepseek_model,
         messages=messages,
     )
     return response
@@ -56,25 +56,15 @@ def handle_user_input(user_raw:str)->dict:
 
 
 # 保存messages
-# messages里面是混合数据
-# 显式声明messages里可以是任何数据类型
-def save_messages(filepath:Path,messages:list[Any])->None:
-    serializable_msg_list=[]
-    for msg in messages:
-        # hasattr(msg,'model_dump')用于检测遍历到的msg是否有model_dump方法，这是ChatCompletionMessage对象的方法
-        if hasattr(msg,'model_dump'):
-            serializable_msg={"role":msg.role,"content":msg.content}
-            serializable_msg_list.append(serializable_msg)
-        else:
-            serializable_msg_list.append(msg)
+def save_messages(filepath:Path,messages:list[dict[str,str]])->None:
     with open(filepath,'w',encoding='utf-8') as f:
-        json.dump(serializable_msg_list,f,ensure_ascii=False,indent=2)
+        json.dump(messages,f,ensure_ascii=False,indent=2)
 
 
 # 消息记录加载
 def load_messages(filepath:Path)->list:
     # 注意防止文件不存在
-    if not Path.exists(filepath):
+    if not filepath.exists():
         return []
     with open(filepath,'r',encoding='utf-8') as f:
         data=json.load(f)
@@ -108,6 +98,7 @@ def main()->None:
                 continue
             else:
                 print("无历史消息记录！")
+                print(">>>")
                 continue
         if user_raw == "/save" :
             save_messages(FILE_PATH,messages)
@@ -129,7 +120,6 @@ def main()->None:
         print(">>>")
         
         # 添加模型消息
-        # add_new_message(messages,message)
         messages.append({"role": "assistant", "content": content})
 
 

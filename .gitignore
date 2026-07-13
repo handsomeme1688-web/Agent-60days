@@ -3,4 +3,4 @@
 __pycache__/
 *.pyc
 .claude/
-day4/messages.json 
+day4/messages.json
