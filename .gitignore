@@ -1,5 +1,6 @@
 .env
+.env.*
 __pycache__/
-*.json
+*.pyc
 .claude/
-./.claude/
+day4/messages.json 
