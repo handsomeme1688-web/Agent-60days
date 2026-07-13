@@ -112,17 +112,23 @@ def drop(messages:list[dict],max_tokens:int)->tuple[list[dict],bool]:
     system_bytes=len(messages[0]["content"])
     system_tokens=estimate_tokens(system_bytes)
     
+    # 计算用户输入消息的大小
+    user_bytes=len(messages[-1]["content"])
+    user_tokens=estimate_tokens(user_bytes)
+    
     # 太大直接禁止
-    if total_tokens>max_tokens-system_tokens:
+    # 需要裁剪的前提是 total > 3000。而你的拒绝条件是 total > 3000 - system_tokens（比如 3000-16=2984）。**任何 > 3000 的数，必然也 > 2984。
+    if user_tokens+system_tokens>max_tokens:
         return messages,False    
     
     # 适中，修剪(太小不会进入 while 循环)
     while total_tokens > max_tokens:
-        delete_bytes=len(messages[1]["content"])
-        delete_tokens=estimate_tokens(delete_bytes)
         # 成对删除
+        delete_bytes=len(messages[1]["content"])+len(messages[2]["content"])
+        delete_tokens=estimate_tokens(delete_bytes)
         messages.pop(1)
         messages.pop(1)
+        # 更新总大小
         total_tokens-=delete_tokens
     return messages,True
         
