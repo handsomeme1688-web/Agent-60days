@@ -1,0 +1,22 @@
+[
+  {
+    "role": "system",
+    "content": "You are a helpful assistant"
+  },
+  {
+    "role": "user",
+    "content": "/load"
+  },
+  {
+    "role": "assistant",
+    "content": "Which file would you like me to load? Please provide the file path or name."
+  },
+  {
+    "role": "user",
+    "content": "你是谁？"
+  },
+  {
+    "role": "assistant",
+    "content": "我是 DeepSeek，由深度求索公司创造的 AI 助手。我可以回答你的问题、提供信息、协助写作、处理文件，还能帮你分析数据、解决技术难题等。有什么我可以帮你的吗？😊"
+  }
+]
