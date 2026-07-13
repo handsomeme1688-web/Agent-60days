@@ -5,6 +5,7 @@ token 自动丢最早对话（保留 system；发送前用「字符数 ÷ 1.7」
 凭什么能做出来：①② 用今天学的流式与 usage；③ 用今天的 token 概念 + Day 4 的历史列表。
 '''
 
+from functools import lru_cache
 import json
 from pathlib import Path
 from openai import OpenAI, Stream
@@ -26,33 +27,35 @@ class Settings(BaseSettings):
     deepseek_api_key:str
     deepseek_base_url:str
     deepseek_model: str = "deepseek-v4-pro"
-    
     model_config=SettingsConfigDict(
         env_file=".env",
         env_file_encoding='utf-8',
         extra="ignore"
-        
     )
     
+    
 # 实例化一个设置类
-settings = Settings()  # type: ignore[call-arg]
+@lru_cache
+def get_settings()->Settings:
+    return Settings() # type: ignore[call-arg]
 
 
-client=OpenAI(
-    api_key=settings.deepseek_api_key,
-    base_url=settings.deepseek_base_url
-)
+# 创建客户端
+@lru_cache
+def get_client()->OpenAI:
+    s = get_settings() 
+    return OpenAI(api_key=s.deepseek_api_key,base_url=s.deepseek_base_url)
 
 
 # 响应生成
 def generate_response(messages:list)->Stream[ChatCompletionChunk]:
+    client = get_client()
+    s=get_settings()
     response = client.chat.completions.create(
-        model=settings.deepseek_model,
+        model=s.deepseek_model,
         messages=messages,
         stream=True,
         stream_options={"include_usage": True},
-        reasoning_effort='high',
-        extra_body={"thinking": {"type": "enabled"}},
     )
     return response
 
@@ -87,7 +90,8 @@ def clear_messages(filepath:Path)->None:
         json.dump([],f,ensure_ascii=False,indent=2)
 
 
-def usage(final_usage,total_tokens,total_price)->list[int]: 
+# 计算开销
+def usage(final_usage,total_tokens,total_price)->tuple[int,float,int,float]: 
     input_cached=final_usage.prompt_tokens_details.cached_tokens
     output=final_usage.completion_tokens
     total_input=final_usage.prompt_tokens
@@ -95,29 +99,41 @@ def usage(final_usage,total_tokens,total_price)->list[int]:
     delta_tokens=total_input+output
     total_tokens+=delta_tokens
     total_price+=delta_price
-    return [delta_tokens,delta_price,total_tokens,total_price]
+    return delta_tokens,delta_price,total_tokens,total_price
 
+# 换算成token长度
+def estimate_tokens(byte_number:float | int)->int :
+    return int(byte_number/1.7)
+
+    
 
 # 历史超3000token自动丢最早对话
-def drop(messages,max_tokens):
+def drop(messages:list[dict],max_tokens:int)->tuple[list[dict],bool]:
     # 统计messages数组长度
-    total_tokens=int(sum(len(msg["content"]) for msg in messages)/1.7)
+    total_bytes=sum(len(msg["content"]) for msg in messages)
+    total_tokens=estimate_tokens(total_bytes)
     
     # 计算system消息的大小
-    system_tokens=int(len(messages[0]["content"]))
+    system_bytes=len(messages[0]["content"])
+    system_tokens=estimate_tokens(system_bytes)
     
-    # 未超直接放行
-    if total_tokens<=max_tokens:
-        return messages,True
+    # 计算用户输入消息的大小
+    user_bytes=len(messages[-1]["content"])
+    user_tokens=estimate_tokens(user_bytes)
     
     # 太大直接禁止
-    if total_tokens>max_tokens-system_tokens:
-        return messages,False
+    if user_tokens+system_tokens>max_tokens:
+        return messages,False    
     
-    # 适中，修剪
+    # 适中，修剪(太小不会进入 while 循环)
     while total_tokens > max_tokens:
-        delete_tokens=int(len(messages[1]["content"]))
-        messages.pop(1)
+        # 成对删除
+        delete_bytes=len(messages[1]["content"])+len(messages[2]["content"])
+        delete_tokens=estimate_tokens(delete_bytes)
+        if messages[1]["role"]=="user" and messages[2]["role"]=="assistant":
+            messages.pop(1)
+            messages.pop(1)
+        # 更新总大小
         total_tokens-=delete_tokens
     return messages,True
         
@@ -126,6 +142,7 @@ def main()->None:
     total_tokens=0
     total_price=0
     max_tokens=3000
+    
     # messages初始化
     messages:list[dict[str,str]]=[
         {"role":"system","content":"You are a helpful assistant"},
@@ -145,6 +162,7 @@ def main()->None:
                 continue
             else:
                 print("无历史消息记录！")
+                messages:list[dict[str,str]]=[{"role":"system","content":"You are a helpful assistant"},]
                 print(">>>")
                 continue
         if user_raw == "/save" :
@@ -169,14 +187,10 @@ def main()->None:
             
         
         # LLM 输出，并等待用户下次输入
-        reasoning_content=''
         content=''
         final_usage = None 
         raw_response = generate_response(messages)
         for chunk in raw_response:
-            delta_reasoning=chunk.choices[0].delta.reasoning_content # type: ignore
-            if delta_reasoning:
-                reasoning_content+=delta_reasoning
             delta_content=chunk.choices[0].delta.content 
             if delta_content:
                 content+=delta_content
