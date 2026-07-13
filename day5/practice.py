@@ -51,8 +51,6 @@ def generate_response(messages:list)->Stream[ChatCompletionChunk]:
         messages=messages,
         stream=True,
         stream_options={"include_usage": True},
-        reasoning_effort='high',
-        extra_body={"thinking": {"type": "enabled"}},
     )
     return response
 
@@ -87,7 +85,8 @@ def clear_messages(filepath:Path)->None:
         json.dump([],f,ensure_ascii=False,indent=2)
 
 
-def usage(final_usage,total_tokens,total_price)->list[int]: 
+# 计算开销
+def usage(final_usage,total_tokens,total_price)->tuple[int,float,int,float]: 
     input_cached=final_usage.prompt_tokens_details.cached_tokens
     output=final_usage.completion_tokens
     total_input=final_usage.prompt_tokens
@@ -95,28 +94,34 @@ def usage(final_usage,total_tokens,total_price)->list[int]:
     delta_tokens=total_input+output
     total_tokens+=delta_tokens
     total_price+=delta_price
-    return [delta_tokens,delta_price,total_tokens,total_price]
+    return delta_tokens,delta_price,total_tokens,total_price
 
+# 换算成token长度
+def estimate_tokens(byte_number:float | int)->int :
+    return int(byte_number/1.7)
+
+    
 
 # 历史超3000token自动丢最早对话
-def drop(messages,max_tokens):
+def drop(messages:list[dict],max_tokens:int)->tuple[list[dict],bool]:
     # 统计messages数组长度
-    total_tokens=int(sum(len(msg["content"]) for msg in messages)/1.7)
+    total_bytes=sum(len(msg["content"]) for msg in messages)
+    total_tokens=estimate_tokens(total_bytes)
     
     # 计算system消息的大小
-    system_tokens=int(len(messages[0]["content"]))
-    
-    # 未超直接放行
-    if total_tokens<=max_tokens:
-        return messages,True
+    system_bytes=len(messages[0]["content"])
+    system_tokens=estimate_tokens(system_bytes)
     
     # 太大直接禁止
     if total_tokens>max_tokens-system_tokens:
-        return messages,False
+        return messages,False    
     
-    # 适中，修剪
+    # 适中，修剪(太小不会进入 while 循环)
     while total_tokens > max_tokens:
-        delete_tokens=int(len(messages[1]["content"]))
+        delete_bytes=len(messages[1]["content"])
+        delete_tokens=estimate_tokens(delete_bytes)
+        # 成对删除
+        messages.pop(1)
         messages.pop(1)
         total_tokens-=delete_tokens
     return messages,True
@@ -145,6 +150,7 @@ def main()->None:
                 continue
             else:
                 print("无历史消息记录！")
+                messages:list[dict[str,str]]=[{"role":"system","content":"You are a helpful assistant"},]
                 print(">>>")
                 continue
         if user_raw == "/save" :
