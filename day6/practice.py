@@ -62,23 +62,21 @@ def generate_response(messages:list)->ChatCompletion:
     return response
 
 
-# 处理用户输入
-def add_to_messages(str_raw:str)->dict:
-    return {"role":"user","content":str_raw}
-
-
 def main()->None:
     while True:
+        # 重建messages防污染
         messages:list[dict[str,str]]=[
             {"role":"system","content":system_prompt},
-            # {"role":"user","content":string}
         ]
         
         # 获取输入
-        raw_input=input("请输入简历：\n>>>")
+        raw_input=input("请输入简历：\n>>>").strip()
+        if not raw_input:
+            print("输入为空，请重新输入！")
+            continue
         
         # 输入处理，消息
-        message=add_to_messages(raw_input)
+        message={"role":"user","content":raw_input}
         messages.append(message)
         
         # 消息传递给模型, 模型收到消息产生响应
@@ -87,20 +85,22 @@ def main()->None:
         # 输出json格式，try，最多3次
         for _ in range(3):
             content = response.choices[0].message.content
-            if content:
-                try:
-                    # pydantic校验
-                    person=Person.model_validate_json(content)
-                    
-                    # 打印Person实例的json格式
-                    print("\n",person.model_dump_json(indent=2),'\n')
-                    break
-                except (json.JSONDecodeError,ValidationError) as e:
-                    messages.append({"role":"assistant","content":content})
-                    messages.append({"role":"user","content":f'你的输出有误{e}'})
-                    response=generate_response(messages)
-            else:
-                print("重试三次仍然失败")
+            try:
+                if not content:
+                    raise ValueError("模型返回空内容")
+                # pydantic校验
+                person=Person.model_validate_json(content)
+                
+                # 打印Person实例的json格式
+                print("\n",person.model_dump_json(indent=2),'\n')
+                break
+            except (json.JSONDecodeError,ValidationError,ValueError) as e:
+                # 三类失败统一处理：空内容 / JSON 语法错 / 字段校验错 → 均带着错误原因重试
+                messages.append({"role":"assistant","content":content or "(空)"}) 
+                messages.append({"role":"user","content":f'你的输出有误{e}'})
+                response=generate_response(messages)
+        else:
+            print("重试三次仍然失败")
 
 
 if __name__ == "__main__":
