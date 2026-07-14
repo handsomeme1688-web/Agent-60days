@@ -6,7 +6,6 @@
 
 from functools import lru_cache
 import json
-from pathlib import Path
 from openai.types.chat import ChatCompletion
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
