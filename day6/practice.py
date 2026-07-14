@@ -9,44 +9,14 @@ import json
 from pathlib import Path
 from openai.types.chat import ChatCompletion
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-FILE_PATH=Path(__file__).parent/"messages.json"
+system_prompt =  """你是简历信息抽取助手。从用户提供的自我介绍中抽取信息，只输出 JSON，不要任何解释。
+输出格式：
+{"name": "姓名", "phone_number": "电话", "edu_back": "学历（如：某某大学本科）", "skills": ["技能1", "技能2"]}
+要求：找不到的字段填空字符串或空数组，不要编造。"""
 
-string="""
-哈喽大家好，那个……被逼着来做个自我介绍。我叫张三（嗯对，就是那个法外狂徒的张三，但我是遵纪守法的）。
-学历这块吧，说起来都是眼泪，本科在某某大学读的计算机科学与技术专业。
-虽然拿到了学士学位，但感觉那四年我主要进修的是“如何优雅地在宿舍躺尸”以及“期末极限预习法律准备”。
-至于技能……怎么说呢，我会的挺杂的。简历上写着精通 Python 和 Java，但实际上面对 Bug 时我主要靠“复制粘贴”和“对电脑拜拜”。
-哦，我还考过一个大学英语六级（CET-6），目前的水平仅限于看美剧不用频繁盯着字幕，以及能听懂外国友人骂我。
-噢对了，我 office 三件套玩得贼溜，尤其是 Excel，能用公式把一个简单的账单算得像高数现场。
-如果你有什么急事（最好是别有事，尤其是工作），可以call我的电话：138-1234-5678。
-不过我这人有轻度电话恐惧症，陌生号码一律当推销挂掉，所以强烈建议先发短信，或者直接加微信，备注一下你是谁。
-差不多就这些了！一个普通的、每天都在为了生活对电脑疯狂输出的打工人。很高兴认识大家（如果你们不找我加班的话）！
-"""
-
-system_prompt = """
-The user will provide some exam text. Please parse the "information" and "abstract" and output them in JSON format. 
-
-EXAMPLE INPUT: 
-哈喽大家好，那个……被逼着来做个自我介绍。我叫张三（嗯对，就是那个法外狂徒的张三，但我是遵纪守法的）。
-学历这块吧，说起来都是眼泪，本科在清华大学读的计算机科学与技术专业。
-虽然拿到了学士学位，但感觉那四年我主要进修的是“如何优雅地在宿舍躺尸”以及“期末极限预习法律准备”。
-至于技能……怎么说呢，我会的挺杂的。简历上写着精通 Python 和 Java，但实际上面对 Bug 时我主要靠“复制粘贴”和“对电脑拜拜”。
-哦，我还考过一个大学英语六级（CET-6），目前的水平仅限于看美剧不用频繁盯着字幕，以及能听懂外国友人骂我。
-噢对了，我 office 三件套玩得贼溜，尤其是 Excel，能用公式把一个简单的账单算得像高数现场。
-如果你有什么急事（最好是别有事，尤其是工作），可以call我的电话：138-1234-5678。
-不过我这人有轻度电话恐惧症，陌生号码一律当推销挂掉，所以强烈建议先发短信，或者直接加微信，备注一下你是谁。
-差不多就这些了！一个普通的、每天都在为了生活对电脑疯狂输出的打工人。很高兴认识大家（如果你们不找我加班的话）！
-{"张三","138-1234-5678","清华大学本科",["英语六级","office"]}
-
-EXAMPLE JSON OUTPUT:
-{
-    "information": "哈喽大家好，那个……被逼着来做个自我介绍。我叫张三（嗯对，就是那个法外狂徒的张三，但我是遵纪守法的）。学历这块吧，说起来都是眼泪，本科在清华大学读的计算机科学与技术专业。虽然拿到了学士学位，但感觉那四年我主要进修的是“如何优雅地在宿舍躺尸”以及“期末极限预习法律准备”。至于技能……怎么说呢，我会的挺杂的。简历上写着精通 Python 和 Java，但实际上面对 Bug 时我主要靠“复制粘贴”和“对电脑拜拜”。哦，我还考过一个大学英语六级（CET-6），目前的水平仅限于看美剧不用频繁盯着字幕，以及能听懂外国友人骂我。噢对了，我 office 三件套玩得贼溜，尤其是 Excel，能用公式把一个简单的账单算得像高数现场。如果你有什么急事（最好是别有事，尤其是工作），可以call我的电话：138-1234-5678。不过我这人有轻度电话恐惧症，陌生号码一律当推销挂掉，所以强烈建议先发短信，或者直接加微信，备注一下你是谁。差不多就这些了！一个普通的、每天都在为了生活对电脑疯狂输出的打工人。很高兴认识大家（如果你们不找我加班的话）！",
-    "abstract": "{"张三","138-1234-5678","清华大学本科",["英语六级","office"]}"
-}
-"""
 
 class Settings(BaseSettings):
     deepseek_api_key : str 
@@ -58,12 +28,12 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     
-
+    
 class Person(BaseModel):
     name : str
     phone_number : str
     edu_back : str
-    skills : list
+    skills : list[str]
    
    
 # 延迟校验
@@ -83,7 +53,6 @@ def get_client()->OpenAI:
 def generate_response(messages:list)->ChatCompletion:
     client=get_client()
     s=get_settings()
-
     response= client.chat.completions.create(
         model=s.deepseek_model,
         messages=messages,
@@ -107,7 +76,7 @@ def main()->None:
         ]
         
         # 获取输入
-        raw_input=input("")
+        raw_input=input("请输入简历：\n>>>")
         
         # 输入处理，消息
         message=add_to_messages(raw_input)
@@ -116,27 +85,23 @@ def main()->None:
         # 消息传递给模型, 模型收到消息产生响应
         response=generate_response(messages)
 
-        # TODO 输出json格式，try，最多3次
-        n=3
-        while n>0:
-            n-=1
+        # 输出json格式，try，最多3次
+        for _ in range(3):
             content = response.choices[0].message.content
             if content:
                 try:
-                    # raw_str=content["abstract"]
-                    # name,phone_number,edu_back,skills=content["abstract"]
-                    # person-Person()
-                    # TODO 期待模型输出为{姓名，电话，学历，技能[]}
-                    # TODO 打印Person实例的json格式
-                    # print(content)
-                    print(json.loads(content))
-
+                    # pydantic校验
+                    person=Person.model_validate_json(content)
+                    
+                    # 打印Person实例的json格式
+                    print("\n",person.model_dump_json(indent=2),'\n')
                     break
-                except json.JSONDecodeError as e:
-                    e_str=str(e)
-                    e_message=add_to_messages(e_str)
-                    messages.append(e_message)
+                except (json.JSONDecodeError,ValidationError) as e:
+                    messages.append({"role":"assistant","content":content})
+                    messages.append({"role":"user","content":f'你的输出有误{e}'})
                     response=generate_response(messages)
+            else:
+                print("重试三次仍然失败")
 
 
 if __name__ == "__main__":
